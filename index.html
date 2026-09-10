@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>第一人称草稿本 · 圆珠笔手绘 DEMO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<!-- HUD 叠加层 -->
+<div id="hud">
+  <!-- 左上：得分 / 波次 -->
+  <div class="hud-top-left">
+    <div class="hud-label hud-score">SCORE <span id="scoreVal">0000</span></div>
+    <div class="hud-label hud-wave">WAVE <span id="waveVal">01</span></div>
+  </div>
+
+  <!-- 右上：弹药（打卡记数符号 Tally Marks） -->
+  <div class="hud-top-right">
+    <div class="hud-label">RIFLE</div>
+    <canvas id="ammoCanvas" width="180" height="40"></canvas>
+  </div>
+
+  <!-- 左下：HP 血条（斜线填充） -->
+  <div class="hud-bottom-left">
+    <div class="hud-label">HP</div>
+    <canvas id="hpCanvas" width="220" height="26"></canvas>
+  </div>
+
+  <!-- 右下：FPP 提示 -->
+  <div class="hud-bottom-right">
+    <div class="hud-hint">WASD 移动 · 鼠标 环顾 · 左键 开火(占位) · 右键 瞄准</div>
+  </div>
+</div>
+
+<div id="errorBox" style="position:fixed;top:0;left:0;z-index:999;background:#fff;color:#c0392b;padding:10px;font:12px monospace;white-space:pre-wrap;display:none;"></div>
+<script>
+window.addEventListener('error', function(e) {
+  var box = document.getElementById('errorBox');
+  box.style.display = 'block';
+  box.textContent = 'ERROR: ' + e.message + '\n' + (e.filename||'') + ':' + (e.lineno||'');
+});
+window.addEventListener('unhandledrejection', function(e) {
+  var box = document.getElementById('errorBox');
+  box.style.display = 'block';
+  box.textContent = 'PROMISE ERROR: ' + (e.reason && e.reason.message ? e.reason.message : e.reason);
+});
+</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
