@@ -1,17 +1,19 @@
 /**
- * 后处理 Shader + 排线纹理
- * 核心：把 3D 渲染结果转为「纸张 + 蓝墨水边缘 + 排线阴影 + 手绘抖动」风格
+ * 后处理 Shader + 排线纹理 — v2
+ * 风格要点：
+ *  - 暖米纸色 + 浅蓝横线 + 左侧 6% 浅红边距线
+ *  - 极其克制的单向排线（仅暗面 lum<0.35、密度减半、无交叉排线）
+ *  - 干净的单像素蓝墨线条（移除画面级抖动与颗粒）
+ *  - 橙/红暖色保留通道（彩笔高亮直接叠加在手绘蓝线之上）
  */
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 /**
- * 生成一张斜线排线纹理
- * @param {number} spacing 线间距（越小越密）
- * @param {number} angle   斜线角度（弧度）
- * @param {boolean} cross  是否叠加交叉斜线
+ * 生成一张单向 45° 斜线排线纹理（无交叉网格）
+ * @param {number} spacing 线间距（越大越疏）
  */
-function createHatchingTexture(spacing, angle = -Math.PI / 4, cross = false) {
+function createHatchingTexture(spacing, angle = -Math.PI / 4) {
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = size; canvas.height = size;
@@ -19,41 +21,32 @@ function createHatchingTexture(spacing, angle = -Math.PI / 4, cross = false) {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, size, size);
   ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 1.6;
+  ctx.lineWidth = 1.2;
 
-  // 手绘抖动：每条线加微小偏移
-  const drawHatch = (offAngle) => {
-    const dx = Math.cos(offAngle);
-    const dy = Math.sin(offAngle);
-    // 用足够多的平行线覆盖画布
-    const step = spacing;
-    for (let d = -size; d < size * 2; d += step) {
-      ctx.beginPath();
-      // 垂直于线的方向偏移
-      const px = -dy, py = dx;
-      // 找到线上两个端点
-      const startX = d * px + (-size) * dx;
-      const startY = d * py + (-size) * dy;
-      const endX = d * px + (size) * dx;
-      const endY = d * py + (size) * dy;
-      // 分 4 段画，每段加抖动
-      const seg = 4;
-      ctx.moveTo(startX + jitter(), startY + jitter());
-      for (let i = 1; i <= seg; i++) {
-        const t = i / seg;
-        ctx.lineTo(
-          startX + (endX - startX) * t + jitter(),
-          startY + (endY - startY) * t + jitter(),
-        );
-      }
-      ctx.stroke();
+  // 轻微手绘抖动（保留笔触感，但不粗）
+  const jitter = () => (Math.random() - 0.5) * 1.0;
+
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  const step = spacing;
+  const px = -dy, py = dx;
+  for (let d = -size; d < size * 2; d += step) {
+    const startX = d * px + (-size) * dx;
+    const startY = d * py + (-size) * dy;
+    const endX = d * px + (size) * dx;
+    const endY = d * py + (size) * dy;
+    const seg = 4;
+    ctx.beginPath();
+    ctx.moveTo(startX + jitter(), startY + jitter());
+    for (let i = 1; i <= seg; i++) {
+      const t = i / seg;
+      ctx.lineTo(
+        startX + (endX - startX) * t + jitter(),
+        startY + (endY - startY) * t + jitter(),
+      );
     }
-  };
-
-  const jitter = () => (Math.random() - 0.5) * 2.2;
-
-  drawHatch(angle);
-  if (cross) drawHatch(angle + Math.PI / 2);
+    ctx.stroke();
+  }
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -63,13 +56,13 @@ function createHatchingTexture(spacing, angle = -Math.PI / 4, cross = false) {
   return tex;
 }
 
-/** 4 张不同密度的排线纹理（亮 → 暗） */
+/** 4 张不同密度的单向排线纹理（亮 → 暗，密度比 v1 减半） */
 export function createHatchingTextures() {
   return [
-    createHatchingTexture(28, -Math.PI / 4, false), // 0 稀疏单斜线
-    createHatchingTexture(16, -Math.PI / 4, false), // 1 中等单斜线
-    createHatchingTexture(10, -Math.PI / 4, true),  // 2 交叉排线
-    createHatchingTexture(5,  -Math.PI / 4, true),  // 3 密集交叉排线
+    createHatchingTexture(56), // 0 稀疏（v1 28 → 56，密度减半）
+    createHatchingTexture(32), // 1 中疏（v1 16 → 32）
+    createHatchingTexture(20), // 2 较密（v1 10 → 20）
+    createHatchingTexture(10), // 3 最密（v1 5 → 10）
   ];
 }
 
@@ -94,12 +87,13 @@ const fragmentShader = /* glsl */ `
 
   varying vec2 vUv;
 
-  const vec3 PAPER    = vec3(0.955, 0.935, 0.862); // 米白纸色
-  const vec3 INK      = vec3(0.10, 0.14, 0.40);    // 蓝墨水
-  const vec3 INK_LIGHT= vec3(0.25, 0.30, 0.55);    // 淡蓝墨水
-  const vec3 MARGIN   = vec3(0.82, 0.32, 0.30);    // 红色装订线
+  const vec3 PAPER      = vec3(0.96, 0.94, 0.88); // 暖米色纸张
+  const vec3 RULED_BLUE = vec3(0.75, 0.82, 0.93); // 浅蓝横向笔记本线
+  const vec3 MARGIN_RED = vec3(0.88, 0.45, 0.45); // 浅红边距线（左 6%）
+  const vec3 INK        = vec3(0.12, 0.22, 0.65); // 圆珠笔蓝（线条/排线）
+  const vec3 INK_SOFT   = vec3(0.55, 0.62, 0.80); // 淡蓝墨水（物体底色）
 
-  // ---- 噪声（手绘抖动用） ----
+  // ---- 伪随机 / 平滑噪声（仅用于横线、边距线的手绘微抖动） ----
   float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
   }
@@ -114,10 +108,11 @@ const fragmentShader = /* glsl */ `
     );
   }
 
-  // ---- Sobel 边缘检测（基于亮度） ----
   float luminance(vec2 uv) {
     return dot(texture2D(tDiffuse, uv).rgb, vec3(0.299, 0.587, 0.114));
   }
+
+  // ---- Sobel 边缘（基于亮度，返回梯度幅值） ----
   float sobel(vec2 uv) {
     vec2 px = 1.0 / resolution;
     float tl = luminance(uv + vec2(-px.x,  px.y));
@@ -130,66 +125,75 @@ const fragmentShader = /* glsl */ `
     float br = luminance(uv + vec2( px.x, -px.y));
     float gx = -tl - 2.0*l - bl + tr + 2.0*r + br;
     float gy = -tl - 2.0*t - tr + bl + 2.0*b + br;
-    return clamp(sqrt(gx*gx + gy*gy) * 2.0, 0.0, 1.0);
+    return sqrt(gx*gx + gy*gy);
   }
 
   void main() {
     vec2 uv = vUv;
 
-    // 手绘抖动：低频噪声让整个画面轻微弯曲
-    float jx = (noise(uv * vec2(420.0, 610.0) + time * 0.35) - 0.5) * jitterStrength;
-    float jy = (noise(uv * vec2(610.0, 420.0) + time * 0.28) - 0.5) * jitterStrength;
-    vec2 suv = uv + vec2(jx, jy);
-
-    vec3 scene = texture2D(tDiffuse, suv).rgb;
+    // 直接采样：不做画面级按帧抖动，线条保持干净
+    vec3 scene = texture2D(tDiffuse, uv).rgb;
     float lum = dot(scene, vec3(0.299, 0.587, 0.114));
 
-    // 边缘
-    float edge = sobel(suv);
+    vec3 color = PAPER;
 
-    // 判断「物体 vs 背景」：背景接近纸色（亮度高），物体偏暗
-    float objectMask = 1.0 - smoothstep(0.75, 0.95, lum);
+    // ---- 物体 vs 背景：地面/纸张为背景（干净留白） ----
+    float objectMask = 1.0 - smoothstep(0.70, 0.86, lum);
 
-    // 排线阴影：根据亮度分 4 层混合（暗 → 密集排线）
-    vec2 huv = suv * vec2(1.6, 1.6);
+    // ---- 排线阴影：仅暗面(lum<0.35) 且仅物体区域；单向斜线 ----
+    vec2 huv = uv * vec2(1.6, 1.6);
     float h0 = texture2D(hatchTex0, huv).r;
     float h1 = texture2D(hatchTex1, huv).r;
     float h2 = texture2D(hatchTex2, huv).r;
     float h3 = texture2D(hatchTex3, huv).r;
 
     float hatch = 0.0;
-    if (lum > 0.62) hatch = 0.0;
-    else if (lum > 0.45) hatch = h0;
-    else if (lum > 0.28) hatch = mix(h0, h1, smoothstep(0.45, 0.28, lum));
-    else if (lum > 0.12) hatch = mix(h1, h2, smoothstep(0.28, 0.12, lum));
-    else hatch = mix(h2, h3, smoothstep(0.12, 0.0, lum));
+    if (lum < 0.35) {
+      if (lum > 0.27)      hatch = h0;
+      else if (lum > 0.19) hatch = mix(h0, h1, smoothstep(0.27, 0.19, lum));
+      else if (lum > 0.10) hatch = mix(h1, h2, smoothstep(0.19, 0.10, lum));
+      else                 hatch = mix(h2, h3, smoothstep(0.10, 0.0, lum));
+    }
+    float hatchAmt = hatch * 0.5 * objectMask;
+    color = mix(color, INK, hatchAmt);
 
-    // 合成：从纸张开始
-    vec3 color = PAPER;
+    // 物体淡蓝底色（极淡）
+    color = mix(color, INK_SOFT, objectMask * 0.10);
 
-    // 物体区域：排线阴影（蓝色排线） + 保留物体轮廓色
-    color = mix(color, INK, hatch * 0.55 * objectMask);
-    // 物体本身底色（淡蓝墨水）
-    color = mix(color, INK_LIGHT, objectMask * 0.18);
+    // ---- 细蓝墨边缘：二值化阈值 → 干净单像素线条 ----
+    float edge = sobel(uv);
+    float edgeLine = smoothstep(0.10, 0.15, edge);
+    edgeLine *= (0.35 + objectMask);
+    color = mix(color, INK, edgeLine * 0.9);
 
-    // 蓝墨水边缘勾勒（物体轮廓 + 结构线）
-    color = mix(color, INK, edge * 0.85 * (0.3 + objectMask));
+    // ---- 浅蓝横向笔记本线（间距约 28px，静态手绘微弯） ----
+    float ruledFreq = resolution.y / 28.0;
+    float wiggle = (noise(vec2(uv.x * 90.0, 7.31)) - 0.5) * 0.006;
+    float linePos = fract((uv.y + wiggle) * ruledFreq);
+    float ruled = smoothstep(0.988, 1.0, linePos) * (1.0 - smoothstep(1.0, 1.012, linePos));
+    color = mix(color, RULED_BLUE, ruled * 0.55);
 
-    // 纸张横向划线（等间距浅蓝横线）
-    float ruledFreq = 46.0;
-    float lineY = fract(uv.y * ruledFreq + jy * ruledFreq * 0.5);
-    float ruled = smoothstep(0.965, 1.0, lineY) * (1.0 - smoothstep(1.0, 1.01, lineY));
-    color = mix(color, INK_LIGHT, ruled * 0.30);
+    // ---- 左侧浅红边距线（约 6% 宽度位置，手绘微抖动） ----
+    float marginX = 0.06 + (noise(vec2(uv.y * 50.0, 13.7)) - 0.5) * 0.006;
+    float marginLine = smoothstep(marginX - 0.0012, marginX, uv.x)
+                     * (1.0 - smoothstep(marginX, marginX + 0.0012, uv.x));
+    color = mix(color, MARGIN_RED, marginLine * 0.70);
 
-    // 红色装订线（左侧，带手绘弯曲）
-    float marginX = 0.085 + (noise(vec2(uv.y * 60.0, 3.7)) - 0.5) * 0.006;
-    float marginLine = smoothstep(marginX - 0.0022, marginX, uv.x + jx * 0.3)
-                     * (1.0 - smoothstep(marginX, marginX + 0.0022, uv.x + jx * 0.3));
-    color = mix(color, MARGIN, marginLine * 0.85);
+    // ---- 暖色保留通道（橙/黄/红）：原色直接叠加在手绘蓝线之上 ----
+    // 抗高光溢出判定：r 为最大通道 + b 显著低于 r + 饱和度足够
+    // （纯 hue 检测在 r 通道 clamp 溢出后色相会漂移，导致橙色丢失）
+    float maxc = max(scene.r, max(scene.g, scene.b));
+    float minc = min(scene.r, min(scene.g, scene.b));
+    float sat = maxc - minc;
+    float warmMask = smoothstep(0.12, 0.22, sat)          // 饱和度门槛（排除纸色/灰）
+                   * step(maxc, scene.r + 1e-4)           // r 是最大通道
+                   * (1.0 - smoothstep(0.55, 0.75, scene.b / max(scene.r, 1e-4))); // 蓝分量低
+    warmMask *= (0.15 + objectMask * 0.85);               // 以物体区域为主
+    color = mix(color, scene, warmMask * 0.92);
+    // 暖色物体上仍保留蓝墨轮廓勾勒
+    color = mix(color, INK, edgeLine * warmMask * 0.55);
 
-    // 轻微陈旧感：整体加一点噪点
-    float grain = (hash(uv * resolution + time) - 0.5) * 0.03;
-    color += grain;
+    // 无颗粒：移除 grain，保证干净圆珠笔线条
 
     gl_FragColor = vec4(color, 1.0);
   }
@@ -211,7 +215,7 @@ export function createDoodleShaderPass(hatchTextures) {
       hatchTex3:  { value: hatchTextures[3] },
       time:       { value: 0 },
       resolution: { value: new THREE.Vector2(1, 1) },
-      jitterStrength: { value: 0.004 },
+      jitterStrength: { value: 0.0 },
     },
   });
 }

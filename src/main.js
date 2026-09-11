@@ -27,7 +27,7 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.65));
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
 dirLight.position.set(8, 14, 6);
 scene.add(dirLight);
-const fillLight = new THREE.DirectionalLight(0x8fa3d9, 0.5);
+const fillLight = new THREE.DirectionalLight(0xfff1df, 0.45); // 暖白补光（避免蓝紫光污染暖色保留通道）
 fillLight.position.set(-6, 4, -4);
 scene.add(fillLight);
 
@@ -83,10 +83,10 @@ addBuilding(8, 16, 4, 5, 4);
 addBuilding(-16, 2, 2.5, 4, 2.5);
 addBuilding(16, 4, 3, 6, 3);
 
-// 地面（一张大平面，蓝墨水排线感靠 shader）
+// 地面（一张大平面，颜色接近纸色 → shader 判定为背景，保持干净留白）
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(200, 200),
-  new THREE.MeshLambertMaterial({ color: 0xe8e2d0 })
+  new THREE.MeshLambertMaterial({ color: 0xf5f1e4 })
 );
 ground.rotation.x = -Math.PI / 2;
 ground.position.y = -0.01;
@@ -141,6 +141,54 @@ floaters.push(addFloatingBlock(-6, 7, -10, new THREE.TetrahedronGeometry(1.2), i
 floaters.push(addFloatingBlock(7, 8, -14, new THREE.BoxGeometry(1.4, 1.4, 1.4), inkMat));
 floaters.push(addFloatingBlock(15, 6, -8, new THREE.OctahedronGeometry(1.0), inkMatDark));
 floaters.push(addFloatingBlock(-15, 9, -18, new THREE.TorusGeometry(1.1, 0.25, 8, 16), inkMat));
+
+// ===== 彩笔高亮元素（验证橙/红暖色保留通道） =====
+// 橙色廊桥（连接中央与左侧建筑）
+function addBridge(x, y, z, len) {
+  const mat = new THREE.MeshLambertMaterial({ color: 0xf28c28 }); // 橙色彩笔
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(len, 0.12, 1.1), mat);
+  deck.position.set(x, y, z);
+  scene.add(deck);
+  const deckE = new THREE.LineSegments(
+    new THREE.EdgesGeometry(deck.geometry),
+    new THREE.LineBasicMaterial({ color: 0x1c2a5e })
+  );
+  deckE.position.copy(deck.position);
+  scene.add(deckE);
+  // 桥栏杆（彩笔橙色 + 蓝墨描边）
+  for (let i = 0; i < 5; i++) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.45, 0.06), mat);
+    post.position.set(x + (i - 2) * (len / 4), y + 0.28, z);
+    scene.add(post);
+    const postE = new THREE.LineSegments(
+      new THREE.EdgesGeometry(post.geometry),
+      new THREE.LineBasicMaterial({ color: 0x1c2a5e })
+    );
+    postE.position.copy(post.position);
+    scene.add(postE);
+  }
+}
+addBridge(-3, 3.4, -13, 3.0);
+
+// 橙色管道（建筑外墙彩笔装饰）
+function addOrangePipe(x, y, z, h) {
+  const mat = new THREE.MeshLambertMaterial({ color: 0xf28c28 });
+  const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, h, 10), mat);
+  cyl.position.set(x, y, z);
+  scene.add(cyl);
+  const e = new THREE.LineSegments(
+    new THREE.EdgesGeometry(cyl.geometry),
+    new THREE.LineBasicMaterial({ color: 0x1c2a5e })
+  );
+  e.position.copy(cyl.position);
+  scene.add(e);
+}
+addOrangePipe(0.6, 3, -18, 5);    // 中央楼外墙
+addOrangePipe(13.4, 2.4, -8, 4);  // 右侧楼外墙
+
+// 红色「敌人」方块（远处漂浮，验证红色保留通道）
+const enemyMat = new THREE.MeshLambertMaterial({ color: 0xd93025 });
+floaters.push(addFloatingBlock(0, 1.0, -9, new THREE.BoxGeometry(0.9, 0.9, 0.9), enemyMat));
 
 // ===== 第一人称武器（几何化步枪 + 方框瞄准镜） =====
 const gun = new THREE.Group();
