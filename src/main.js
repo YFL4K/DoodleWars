@@ -1,5 +1,6 @@
 /**
  * 主入口 — Three.js 场景 + 后处理 Shader + 第一人称视角 + HUD
+ * v3：线框渲染重构（Wireframe + 硬边描边，透出背景纸张；取消实体平涂与斜线蒙版）
  */
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -14,59 +15,55 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
-// 背景设为纸色（后处理会进一步叠加横线/装订线）
 scene.background = new THREE.Color(0xf4f0e2);
 
+// 广角相机（FOV 80，拉远通透视野）
 const camera = new THREE.PerspectiveCamera(
-  70, window.innerWidth / window.innerHeight, 0.1, 500
+  80, window.innerWidth / window.innerHeight, 0.1, 500
 );
-camera.position.set(0, 1.7, 5);
+camera.position.set(0, 1.8, 7);
 
-// ===== 光照（让几何体产生明暗，供排线阴影使用） =====
-scene.add(new THREE.AmbientLight(0xffffff, 0.65));
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
-dirLight.position.set(8, 14, 6);
-scene.add(dirLight);
-const fillLight = new THREE.DirectionalLight(0xfff1df, 0.45); // 暖白补光（避免蓝紫光污染暖色保留通道）
-fillLight.position.set(-6, 4, -4);
-scene.add(fillLight);
+// ===== 线框材质（圆珠笔蓝墨，透出纸张） =====
+const wireMat      = new THREE.MeshBasicMaterial({ color: 0x2c3a6e, wireframe: true });
+const wireMatLight = new THREE.MeshBasicMaterial({ color: 0x44518f, wireframe: true });
+const wireMatDark  = new THREE.MeshBasicMaterial({ color: 0x1a2348, wireframe: true });
+// 硬边描边（建筑/枪械轮廓）
+const edgeMat = new THREE.LineBasicMaterial({ color: 0x1c2a5e });
+// 彩笔高亮（solid，橙/红保留通道）
+const accentOrange = new THREE.MeshBasicMaterial({ color: 0xf28c28 });
+const accentRed    = new THREE.MeshBasicMaterial({ color: 0xd93025 });
 
-// ===== 蓝墨水材质 =====
-const inkMat = new THREE.MeshLambertMaterial({ color: 0x2c3a6e });
-const inkMatLight = new THREE.MeshLambertMaterial({ color: 0x44518f });
-const inkMatDark = new THREE.MeshLambertMaterial({ color: 0x1a2348 });
-
-// ===== 环境：Geodesic Dome 穹顶 =====
-const domeRadius = 60;
+// ===== 天空穹顶：半球经纬线框（平滑 3D 弧线） =====
+const domeRadius = 70;
 const dome = new THREE.Mesh(
-  new THREE.IcosahedronGeometry(domeRadius, 2),
-  new THREE.MeshBasicMaterial({ color: 0x3a4a8c, wireframe: true, transparent: true, opacity: 0.35 })
+  new THREE.SphereGeometry(domeRadius, 48, 24, 0, Math.PI / 2, 0, Math.PI * 2),
+  new THREE.MeshBasicMaterial({ color: 0x3a4a8c, wireframe: true, transparent: true, opacity: 0.42 })
 );
-dome.position.y = 10;
+dome.position.y = 0;
 scene.add(dome);
 
-// ===== 环境：几何建筑群 =====
+// ===== 建筑：线框 + 硬边描边（透出纸张） =====
 function addBuilding(x, z, w, h, d) {
   const geo = new THREE.BoxGeometry(w, h, d);
-  const mesh = new THREE.Mesh(geo, inkMat);
+  const mesh = new THREE.Mesh(geo, wireMat);
   mesh.position.set(x, h / 2, z);
   scene.add(mesh);
 
-  // 蓝墨水描边
-  const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geo),
-    new THREE.LineBasicMaterial({ color: 0x1c2a5e })
-  );
+  // 硬边描边
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat);
   edges.position.copy(mesh.position);
   scene.add(edges);
 
-  // 外置楼梯（几何块堆叠）
+  // 外置楼梯（几何块堆叠，线框）
   const stepN = 5;
   for (let i = 0; i < stepN; i++) {
     const sGeo = new THREE.BoxGeometry(w * 0.5, 0.35, 0.8);
-    const step = new THREE.Mesh(sGeo, i % 2 ? inkMatDark : inkMatLight);
+    const step = new THREE.Mesh(sGeo, i % 2 ? wireMatDark : wireMatLight);
     step.position.set(x + w / 2 + i * 0.6, 0.35 + i * 0.45, z + d / 2 + 1.2);
     scene.add(step);
+    const sEdge = new THREE.LineSegments(new THREE.EdgesGeometry(sGeo), edgeMat);
+    sEdge.position.copy(step.position);
+    scene.add(sEdge);
   }
   return mesh;
 }
@@ -83,19 +80,18 @@ addBuilding(8, 16, 4, 5, 4);
 addBuilding(-16, 2, 2.5, 4, 2.5);
 addBuilding(16, 4, 3, 6, 3);
 
-// 地面（一张大平面，颜色接近纸色 → shader 判定为背景，保持干净留白）
+// 地面（大平面，纸色 → shader 判定为背景留白）
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(200, 200),
-  new THREE.MeshLambertMaterial({ color: 0xf5f1e4 })
+  new THREE.PlaneGeometry(300, 300),
+  new THREE.MeshBasicMaterial({ color: 0xf5f1e4 })
 );
 ground.rotation.x = -Math.PI / 2;
 ground.position.y = -0.01;
 scene.add(ground);
 
-// ===== 环境：悬浮云朵 + 几何立体块 =====
+// ===== 悬浮云朵（线框球） =====
 function addCloud(x, y, z, scale) {
   const group = new THREE.Group();
-  const mat = new THREE.MeshLambertMaterial({ color: 0xf7f3ea });
   const spheres = [
     [0, 0, 0, 1.0],
     [1.1, 0.2, 0.2, 0.7],
@@ -103,15 +99,9 @@ function addCloud(x, y, z, scale) {
     [0.3, 0.5, -0.1, 0.55],
   ];
   for (const [sx, sy, sz, sr] of spheres) {
-    const s = new THREE.Mesh(new THREE.SphereGeometry(sr, 10, 8), mat);
+    const s = new THREE.Mesh(new THREE.SphereGeometry(sr, 10, 8), wireMatLight);
     s.position.set(sx, sy, sz);
     group.add(s);
-    const wire = new THREE.Mesh(
-      new THREE.SphereGeometry(sr, 8, 6),
-      new THREE.MeshBasicMaterial({ color: 0x44518f, wireframe: true, transparent: true, opacity: 0.5 })
-    );
-    wire.position.copy(s.position);
-    group.add(wire);
   }
   group.position.set(x, y, z);
   group.scale.setScalar(scale);
@@ -123,63 +113,45 @@ addCloud(12, 14, -30, 1.8);
 addCloud(20, 9, -20, 1.2);
 addCloud(-18, 10, -35, 1.6);
 
-// 悬浮几何立体块
+// 悬浮几何立体块（线框 + 描边）
 function addFloatingBlock(x, y, z, geo, mat) {
   const m = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z);
   scene.add(m);
-  const e = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geo),
-    new THREE.LineBasicMaterial({ color: 0x1c2a5e })
-  );
+  const e = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat);
   e.position.copy(m.position);
   scene.add(e);
   return m;
 }
 const floaters = [];
-floaters.push(addFloatingBlock(-6, 7, -10, new THREE.TetrahedronGeometry(1.2), inkMatLight));
-floaters.push(addFloatingBlock(7, 8, -14, new THREE.BoxGeometry(1.4, 1.4, 1.4), inkMat));
-floaters.push(addFloatingBlock(15, 6, -8, new THREE.OctahedronGeometry(1.0), inkMatDark));
-floaters.push(addFloatingBlock(-15, 9, -18, new THREE.TorusGeometry(1.1, 0.25, 8, 16), inkMat));
+floaters.push(addFloatingBlock(-6, 7, -10, new THREE.TetrahedronGeometry(1.2), wireMatLight));
+floaters.push(addFloatingBlock(7, 8, -14, new THREE.BoxGeometry(1.4, 1.4, 1.4), wireMat));
+floaters.push(addFloatingBlock(15, 6, -8, new THREE.OctahedronGeometry(1.0), wireMatDark));
+floaters.push(addFloatingBlock(-15, 9, -18, new THREE.TorusGeometry(1.1, 0.25, 8, 16), wireMat));
 
-// ===== 彩笔高亮元素（验证橙/红暖色保留通道） =====
+// ===== 彩笔高亮元素（solid，橙/红暖色保留通道） =====
 // 橙色廊桥（连接中央与左侧建筑）
 function addBridge(x, y, z, len) {
-  const mat = new THREE.MeshLambertMaterial({ color: 0xf28c28 }); // 橙色彩笔
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(len, 0.12, 1.1), mat);
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(len, 0.12, 1.1), accentOrange);
   deck.position.set(x, y, z);
   scene.add(deck);
-  const deckE = new THREE.LineSegments(
-    new THREE.EdgesGeometry(deck.geometry),
-    new THREE.LineBasicMaterial({ color: 0x1c2a5e })
-  );
+  const deckE = new THREE.LineSegments(new THREE.EdgesGeometry(deck.geometry), edgeMat);
   deckE.position.copy(deck.position);
   scene.add(deckE);
-  // 桥栏杆（彩笔橙色 + 蓝墨描边）
   for (let i = 0; i < 5; i++) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.45, 0.06), mat);
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.45, 0.06), accentOrange);
     post.position.set(x + (i - 2) * (len / 4), y + 0.28, z);
     scene.add(post);
-    const postE = new THREE.LineSegments(
-      new THREE.EdgesGeometry(post.geometry),
-      new THREE.LineBasicMaterial({ color: 0x1c2a5e })
-    );
-    postE.position.copy(post.position);
-    scene.add(postE);
   }
 }
 addBridge(-3, 3.4, -13, 3.0);
 
 // 橙色管道（建筑外墙彩笔装饰）
 function addOrangePipe(x, y, z, h) {
-  const mat = new THREE.MeshLambertMaterial({ color: 0xf28c28 });
-  const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, h, 10), mat);
+  const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, h, 10), accentOrange);
   cyl.position.set(x, y, z);
   scene.add(cyl);
-  const e = new THREE.LineSegments(
-    new THREE.EdgesGeometry(cyl.geometry),
-    new THREE.LineBasicMaterial({ color: 0x1c2a5e })
-  );
+  const e = new THREE.LineSegments(new THREE.EdgesGeometry(cyl.geometry), edgeMat);
   e.position.copy(cyl.position);
   scene.add(e);
 }
@@ -187,21 +159,18 @@ addOrangePipe(0.6, 3, -18, 5);    // 中央楼外墙
 addOrangePipe(13.4, 2.4, -8, 4);  // 右侧楼外墙
 
 // 红色「敌人」方块（远处漂浮，验证红色保留通道）
-const enemyMat = new THREE.MeshLambertMaterial({ color: 0xd93025 });
-floaters.push(addFloatingBlock(0, 1.0, -9, new THREE.BoxGeometry(0.9, 0.9, 0.9), enemyMat));
+floaters.push(addFloatingBlock(0, 1.0, -9, new THREE.BoxGeometry(0.9, 0.9, 0.9), accentRed));
 
-// ===== 第一人称武器（几何化步枪 + 方框瞄准镜） =====
+// ===== 第一人称武器（线框 + 硬边描边，缩小偏右下） =====
 const gun = new THREE.Group();
 
 function box(w, h, d, mat, x, y, z, rx = 0, ry = 0, rz = 0) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const m = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z);
   m.rotation.set(rx, ry, rz);
   gun.add(m);
-  const e = new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)),
-    new THREE.LineBasicMaterial({ color: 0x141d45 })
-  );
+  const e = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat);
   e.position.copy(m.position);
   e.rotation.copy(m.rotation);
   gun.add(e);
@@ -209,47 +178,31 @@ function box(w, h, d, mat, x, y, z, rx = 0, ry = 0, rz = 0) {
 }
 
 // 枪身（主体）
-box(0.14, 0.16, 0.85, inkMat, 0.32, -0.30, -0.55);
+box(0.14, 0.16, 0.85, wireMat, 0.32, -0.30, -0.55);
 // 枪管
-box(0.06, 0.06, 0.5, inkMatDark, 0.32, -0.28, -1.15);
+box(0.06, 0.06, 0.5, wireMatDark, 0.32, -0.28, -1.15);
 // 瞄准镜（方框）
 const scopeGeo = new THREE.BoxGeometry(0.12, 0.12, 0.22);
-const scope = new THREE.Mesh(scopeGeo, inkMatLight);
+const scope = new THREE.Mesh(scopeGeo, wireMatLight);
 scope.position.set(0.32, -0.12, -0.7);
 gun.add(scope);
-const scopeWire = new THREE.LineSegments(
-  new THREE.EdgesGeometry(scopeGeo),
-  new THREE.LineBasicMaterial({ color: 0x141d45 })
-);
+const scopeWire = new THREE.LineSegments(new THREE.EdgesGeometry(scopeGeo), edgeMat);
 scopeWire.position.copy(scope.position);
 gun.add(scopeWire);
 // 弹匣
-box(0.08, 0.22, 0.14, inkMatDark, 0.32, -0.45, -0.5, 0.2);
+box(0.08, 0.22, 0.14, wireMatDark, 0.32, -0.45, -0.5, 0.2);
 // 握把
-box(0.08, 0.2, 0.1, inkMat, 0.32, -0.48, -0.35, -0.3);
+box(0.08, 0.2, 0.1, wireMat, 0.32, -0.48, -0.35, -0.3);
 // 枪托
-box(0.1, 0.14, 0.2, inkMatLight, 0.32, -0.3, -0.05);
-// 准星（枪管前端小方框）
-const frontPost = new THREE.Mesh(
-  new THREE.BoxGeometry(0.03, 0.08, 0.03),
-  new THREE.MeshBasicMaterial({ color: 0xe0492b }) // 少量橙红高亮
-);
-frontPost.position.set(0.32, -0.2, -1.4);
+box(0.1, 0.14, 0.2, wireMatLight, 0.32, -0.3, -0.05);
+// 准星（枪管前端小方框，橙红高亮）
+const frontPost = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.06, 0.03), accentRed);
+frontPost.position.set(0.32, -0.22, -1.4);
 gun.add(frontPost);
 
-// 枪身侧面的斜线剖面（用密集的细线模拟 hatching）
-const hatchLines = new THREE.Group();
-const hlGeo = new THREE.BoxGeometry(0.001, 0.15, 0.7);
-for (let i = 0; i < 14; i++) {
-  const l = new THREE.Mesh(
-    hlGeo,
-    new THREE.MeshBasicMaterial({ color: 0x141d45 })
-  );
-  l.position.set(0.32 + 0.075, -0.3, -0.85 + i * 0.05);
-  l.rotation.z = -Math.PI / 5;
-  hatchLines.add(l);
-}
-gun.add(hatchLines);
+// 枪械缩小 + 向右下角平移（不遮挡中央视野）
+gun.scale.setScalar(0.55);
+gun.position.set(0.45, -0.42, 0.1);
 
 camera.add(gun);
 scene.add(camera);
@@ -265,15 +218,9 @@ composer.addPass(doodlePass);
 // ===== 第一人称控制 =====
 const keys = {};
 let yaw = 0, pitch = 0;
-let lookX = 0, lookY = 0;
 
 document.addEventListener('click', () => {
   canvas.requestPointerLock();
-});
-document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement === canvas) {
-    // 锁定后重置鼠标增量，避免跳帧
-  }
 });
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement === canvas) {
@@ -291,9 +238,9 @@ const moveSpeed = 6.0;
 
 // ===== HUD =====
 const hud = new HUD();
-let ammo = 30;
+let ammo = 35;        // 弹匣
+let reserve = 175;    // 备弹
 let fireCooldown = 0;
-let score = 0;
 
 // ===== 主循环 =====
 const clock = new THREE.Clock();
@@ -326,17 +273,12 @@ function animate() {
   velocity.lerp(move.multiplyScalar(moveSpeed), 0.15);
   camera.position.addScaledVector(velocity, dt);
 
-  // 开火占位（减弹药，用于演示 Tally Marks）
+  // 开火（F 键占位）
   fireCooldown -= dt;
-  if (keys['KeyF'] || keys['Mouse0'] === true) {
-    // 左键用 pointerlock 外监听，这里用键盘 F 作为占位开火
-  }
-  if (keys['KeyF']) {
-    if (fireCooldown <= 0 && ammo > 0) {
-      ammo--;
-      fireCooldown = 0.15;
-      if (ammo <= 0) ammo = 30;
-    }
+  if (keys['KeyF'] && fireCooldown <= 0 && ammo > 0) {
+    ammo--;
+    fireCooldown = 0.15;
+    if (ammo <= 0) ammo = 35;
   }
 
   // 悬浮物轻微浮动
@@ -354,7 +296,12 @@ function animate() {
   composer.render();
 
   // HUD
-  hud.setStats({ hp: 88, maxHp: 100, ammo, maxAmmo: 30, score: Math.floor(elapsed * 7), wave: 3 });
+  hud.setStats({
+    hp: 88, maxHp: 100,
+    ammo, reserve,
+    score: Math.floor(elapsed * 7),
+    wave: 3,
+  });
   hud.render();
 }
 
@@ -362,7 +309,7 @@ function animate() {
 document.addEventListener('mousedown', (e) => {
   if (e.button === 0 && document.pointerLockElement === canvas && ammo > 0) {
     ammo--;
-    if (ammo <= 0) ammo = 30;
+    if (ammo <= 0) ammo = 35;
   }
 });
 

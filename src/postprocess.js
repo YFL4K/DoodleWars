@@ -1,10 +1,10 @@
 /**
- * 后处理 Shader + 排线纹理 — v2
+ * 后处理 Shader + 排线纹理 — v3
  * 风格要点：
- *  - 暖米纸色 + 浅蓝横线 + 左侧 6% 浅红边距线
- *  - 极其克制的单向排线（仅暗面 lum<0.35、密度减半、无交叉排线）
- *  - 干净的单像素蓝墨线条（移除画面级抖动与颗粒）
- *  - 橙/红暖色保留通道（彩笔高亮直接叠加在手绘蓝线之上）
+ *  - 暖米纸色 + 浅蓝横线（已取消红色装订线）
+ *  - 线框渲染为主：物体用 wireframe 线条表现，透出背景纸张
+ *  - 排线仅作用于极暗面，且排除边缘线（保持干净单像素线条）
+ *  - 橙/黄/红暖色保留通道（彩笔高亮直接叠加在手绘蓝线之上）
  */
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
@@ -89,7 +89,6 @@ const fragmentShader = /* glsl */ `
 
   const vec3 PAPER      = vec3(0.96, 0.94, 0.88); // 暖米色纸张
   const vec3 RULED_BLUE = vec3(0.75, 0.82, 0.93); // 浅蓝横向笔记本线
-  const vec3 MARGIN_RED = vec3(0.88, 0.45, 0.45); // 浅红边距线（左 6%）
   const vec3 INK        = vec3(0.12, 0.22, 0.65); // 圆珠笔蓝（线条/排线）
   const vec3 INK_SOFT   = vec3(0.55, 0.62, 0.80); // 淡蓝墨水（物体底色）
 
@@ -147,6 +146,11 @@ const fragmentShader = /* glsl */ `
     float h2 = texture2D(hatchTex2, huv).r;
     float h3 = texture2D(hatchTex3, huv).r;
 
+    // ---- 细蓝墨边缘：二值化阈值 → 干净单像素线条（先算，供排线排除使用） ----
+    float edge = sobel(uv);
+    float edgeLine = smoothstep(0.10, 0.15, edge);
+
+    // ---- 排线阴影：仅暗面(lum<0.35)，排除边缘线保持线条干净 ----
     float hatch = 0.0;
     if (lum < 0.35) {
       if (lum > 0.27)      hatch = h0;
@@ -154,17 +158,15 @@ const fragmentShader = /* glsl */ `
       else if (lum > 0.10) hatch = mix(h1, h2, smoothstep(0.19, 0.10, lum));
       else                 hatch = mix(h2, h3, smoothstep(0.10, 0.0, lum));
     }
-    float hatchAmt = hatch * 0.5 * objectMask;
+    float hatchAmt = hatch * 0.45 * objectMask * (1.0 - edgeLine * 0.7);
     color = mix(color, INK, hatchAmt);
 
-    // 物体淡蓝底色（极淡）
-    color = mix(color, INK_SOFT, objectMask * 0.10);
+    // 物体淡蓝底色（极淡，仅暗面区域）
+    color = mix(color, INK_SOFT, objectMask * 0.04);
 
-    // ---- 细蓝墨边缘：二值化阈值 → 干净单像素线条 ----
-    float edge = sobel(uv);
-    float edgeLine = smoothstep(0.10, 0.15, edge);
-    edgeLine *= (0.35 + objectMask);
-    color = mix(color, INK, edgeLine * 0.9);
+    // 细蓝墨边缘叠加
+    float edgeLineMask = edgeLine * (0.35 + objectMask);
+    color = mix(color, INK, edgeLineMask * 0.9);
 
     // ---- 浅蓝横向笔记本线（间距约 28px，静态手绘微弯） ----
     float ruledFreq = resolution.y / 28.0;
@@ -172,12 +174,6 @@ const fragmentShader = /* glsl */ `
     float linePos = fract((uv.y + wiggle) * ruledFreq);
     float ruled = smoothstep(0.988, 1.0, linePos) * (1.0 - smoothstep(1.0, 1.012, linePos));
     color = mix(color, RULED_BLUE, ruled * 0.55);
-
-    // ---- 左侧浅红边距线（约 6% 宽度位置，手绘微抖动） ----
-    float marginX = 0.06 + (noise(vec2(uv.y * 50.0, 13.7)) - 0.5) * 0.006;
-    float marginLine = smoothstep(marginX - 0.0012, marginX, uv.x)
-                     * (1.0 - smoothstep(marginX, marginX + 0.0012, uv.x));
-    color = mix(color, MARGIN_RED, marginLine * 0.70);
 
     // ---- 暖色保留通道（橙/黄/红）：原色直接叠加在手绘蓝线之上 ----
     // 抗高光溢出判定：r 为最大通道 + b 显著低于 r + 饱和度足够
