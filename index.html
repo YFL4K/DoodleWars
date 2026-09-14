@@ -6,7 +6,7 @@
 <title>第一人称草稿本 · 圆珠笔手绘 DEMO</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Caveat:wght@600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script type="importmap">
 {
@@ -20,40 +20,34 @@
 <body>
 <canvas id="gameCanvas"></canvas>
 
-<!-- HUD 叠加层 -->
+<!-- HUD 叠加层（复刻 Doodle District 布局） -->
 <div id="hud">
-  <!-- 中央红色准星（圆点 + 十字） -->
-  <div id="crosshair">
-    <div class="ch-line ch-h"></div>
-    <div class="ch-line ch-v"></div>
-    <div class="ch-dot"></div>
-  </div>
-
   <!-- 左上：得分 / 波次 -->
-  <div class="hud-top-left">
-    <div class="hud-label hud-score">SCORE <span id="scoreVal">0000</span></div>
-    <div class="hud-label hud-wave">WAVE <span id="waveVal">03</span></div>
+  <div class="hud-tl">
+    <div>SCORE <b id="scoreVal">0000</b></div>
+    <div class="hud-wave">WAVE <span id="waveVal">03</span></div>
   </div>
 
-  <!-- 左下：HP 血条（宽、斜线纹理）+ 大字号子弹数 -->
-  <div class="hud-bottom-left">
-    <div class="hud-hp-row">
-      <span class="hud-label">HP</span>
-      <canvas id="hpCanvas" width="360" height="34"></canvas>
-    </div>
-    <div class="hud-ammo">
-      <span id="ammoClip">35</span>
-      <span class="ammo-sep">/</span>
-      <span id="ammoReserve">175</span>
+  <!-- 左下：HP 斜线血条 + 大字号弹药 + Tally 记数 -->
+  <div class="hud-bl">
+    <div class="health"><span>HP</span><div class="bar"><div class="fill" id="hpFill"></div></div></div>
+    <div class="ammo"><b id="ammoClip">35</b><span> / <span id="ammoReserve">175</span></span></div>
+    <div class="tally" id="tally"></div>
+  </div>
+
+  <!-- 右下：武器切换槽位 -->
+  <div class="hud-br">
+    <div class="slots" id="slots">
+      <div class="slot active" data-w="0"><span class="num">1</span> RIFLE</div>
+      <div class="slot" data-w="1"><span class="num">2</span> SHOTGUN</div>
+      <div class="slot" data-w="2"><span class="num">3</span> SNIPER</div>
+      <div class="slot" data-w="3"><span class="num">4</span> KATANA</div>
     </div>
   </div>
 
-  <!-- 右下：武器切换菜单 -->
-  <div class="hud-bottom-right">
-    <div class="weapon active">RIFLE</div>
-    <div class="weapon">SHOTGUN</div>
-    <div class="weapon">SNIPER</div>
-    <div class="weapon">KATANA</div>
+  <!-- 中央红色准星 -->
+  <div class="crosshair" id="crosshair">
+    <i class="ch-t"></i><i class="ch-b"></i><i class="ch-l"></i><i class="ch-r"></i><i class="ch-dot"></i>
   </div>
 </div>
 

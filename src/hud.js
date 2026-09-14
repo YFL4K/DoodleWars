@@ -1,19 +1,28 @@
 /**
- * HUD 渲染 — 手绘风
- *  - 中央红色准星（CSS）
- *  - 左下：斜线纹理宽 HP 血条 + 大字号子弹数（弹匣/备弹）
- *  - 右下：武器切换菜单（RIFLE/SHOTGUN/SNIPER/KATANA，静态高亮）
+ * HUD — 复刻 Doodle District：DOM 驱动
+ *  - 左上 SCORE / WAVE
+ *  - 左下 HP 斜线血条（CSS 渐变）+ 大字号弹药 + Tally 打卡记数
+ *  - 右下武器槽位（数字键切换 active）
+ *  - 中央红色准星（CSS，KATANA 切换形态）
  */
 export class HUD {
   constructor() {
-    this.hpCanvas = document.getElementById('hpCanvas');
-    this.hpCtx = this.hpCanvas.getContext('2d');
-    this.hp = 100;
-    this.maxHp = 100;
-    this.ammo = 35;
-    this.reserve = 175;
-    this.score = 0;
-    this.wave = 1;
+    this.el = {
+      score: document.getElementById('scoreVal'),
+      wave: document.getElementById('waveVal'),
+      clip: document.getElementById('ammoClip'),
+      reserve: document.getElementById('ammoReserve'),
+      hpFill: document.getElementById('hpFill'),
+      health: document.querySelector('.health'),
+      tally: document.getElementById('tally'),
+      slots: [...document.querySelectorAll('.slot')],
+      crosshair: document.getElementById('crosshair'),
+    };
+    this.hp = 100; this.maxHp = 100;
+    this.ammo = 35; this.reserve = 175;
+    this.score = 0; this.wave = 1;
+    this.weapon = 0;
+    this._lastTally = -1;
   }
 
   setStats({ hp, maxHp, ammo, reserve, score, wave }) {
@@ -25,58 +34,31 @@ export class HUD {
     if (wave !== undefined) this.wave = wave;
   }
 
+  setWeapon(i) {
+    this.weapon = i;
+    this.el.slots.forEach((s, idx) => s.classList.toggle('active', idx === i));
+    this.el.crosshair.classList.toggle('katana', i === 3);
+  }
+
   render() {
-    this._drawHP();
-    document.getElementById('ammoClip').textContent = String(this.ammo).padStart(2, '0');
-    document.getElementById('ammoReserve').textContent = String(this.reserve);
-    document.getElementById('scoreVal').textContent = String(this.score).padStart(4, '0');
-    document.getElementById('waveVal').textContent = String(this.wave).padStart(2, '0');
-  }
+    const e = this.el;
+    e.score.textContent = String(this.score).padStart(4, '0');
+    e.wave.textContent = String(this.wave).padStart(2, '0');
+    e.clip.textContent = this.ammo;
+    e.reserve.textContent = this.reserve;
 
-  /**
-   * 宽 HP 血条：蓝墨手绘边框 + 斜线纹理填充
-   */
-  _drawHP() {
-    const ctx = this.hpCtx;
-    const w = this.hpCanvas.width;
-    const h = this.hpCanvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    const x = 0, y = 4, bw = w - 4, bh = h - 8;
+    // HP 血条宽度 + 低血量红化
     const ratio = Math.max(0, Math.min(1, this.hp / this.maxHp));
+    e.hpFill.style.width = (ratio * 100).toFixed(1) + '%';
+    e.health.classList.toggle('low', ratio <= 0.3);
 
-    // 手绘边框
-    ctx.strokeStyle = '#1c2a5e';
-    ctx.lineWidth = 2;
-    ctx.lineJoin = 'round';
-    this._doodleRect(ctx, x, y, bw, bh);
-
-    // 斜线纹理填充（仅已损失血量的区域留白，当前血量区域用斜线）
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x + 2, y + 2, (bw - 4) * ratio, bh - 4);
-    ctx.clip();
-    ctx.strokeStyle = '#1c2a5e';
-    ctx.lineWidth = 1.5;
-    const spacing = 6;
-    for (let d = -bh; d < bw + bh; d += spacing) {
-      ctx.beginPath();
-      ctx.moveTo(x + d, y + bh);
-      ctx.lineTo(x + d + bh, y);
-      ctx.stroke();
+    // Tally 打卡记数（仅在弹药变化时重建，避免每帧抖动）
+    if (this.ammo !== this._lastTally) {
+      this._lastTally = this.ammo;
+      const n = Math.min(this.ammo, 60);
+      let html = '';
+      for (let i = 0; i < n; i++) html += '<i></i>';
+      e.tally.innerHTML = html;
     }
-    ctx.restore();
-  }
-
-  /** 手绘抖动矩形 */
-  _doodleRect(ctx, x, y, w, h) {
-    const j = () => (Math.random() - 0.5) * 1.4;
-    ctx.beginPath();
-    ctx.moveTo(x + j(), y + j());
-    ctx.lineTo(x + w + j(), y + j());
-    ctx.lineTo(x + w + j(), y + h + j());
-    ctx.lineTo(x + j(), y + h + j());
-    ctx.closePath();
-    ctx.stroke();
   }
 }

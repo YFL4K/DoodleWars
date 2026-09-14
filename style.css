@@ -1,12 +1,13 @@
-/* ===== 基础 ===== */
+/* ===== 基础（复刻 Doodle District 配色/字体） ===== */
+:root { --ink: #1a30c0; --red: #d02030; --paper: #f6f3e6; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body {
   width: 100%; height: 100%;
   overflow: hidden;
-  background: #f4f0e2;
+  background: var(--paper);
   cursor: crosshair;
-  font-family: 'Architects Daughter', 'Kalam', cursive;
+  font-family: 'Patrick Hand', 'Caveat', 'Comic Sans MS', cursive;
   user-select: none;
 }
 
@@ -21,102 +22,53 @@ html, body {
 /* ===== HUD ===== */
 #hud {
   position: fixed;
-  top: 0; left: 0;
-  width: 100vw; height: 100vh;
+  inset: 0;
   pointer-events: none;
+  color: var(--ink);
+  user-select: none;
+  overflow: hidden;
   z-index: 10;
 }
+.hud-tl, .hud-br, .hud-bl, .crosshair { mix-blend-mode: multiply; }
 
-/* ---- 中央红色准星 ---- */
-#crosshair {
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 0; height: 0;
-  z-index: 20;
-}
-#crosshair .ch-line {
-  position: absolute;
-  background: #e0492b;
-  border-radius: 1px;
-}
-#crosshair .ch-h { width: 26px; height: 2px; top: -1px; left: -13px; }
-#crosshair .ch-v { width: 2px; height: 26px; top: -13px; left: -1px; }
-#crosshair .ch-dot {
-  position: absolute;
-  width: 7px; height: 7px;
-  background: #e0492b;
-  border-radius: 50%;
-  top: -3.5px; left: -3.5px;
-}
+.hud-tl { position: absolute; left: 9%; top: 3%; font-size: 30px; transform: rotate(-1.5deg); }
+.hud-tl b { font-size: 34px; }
+.hud-wave { font-size: 22px; opacity: .8; }
 
-.hud-label {
-  font-family: 'Architects Daughter', 'Kalam', cursive;
-  color: #1c2a5e;
-  font-size: 1.4rem;
-  letter-spacing: 2px;
-  text-shadow: 1px 1px 0 rgba(28,42,94,0.15);
-  transform: rotate(-1deg);
-}
+.hud-bl { position: absolute; left: 9%; bottom: 5%; }
+.hud-br { position: absolute; right: 4%; bottom: 5%; text-align: right; }
 
-.hud-top-left {
-  position: absolute;
-  top: 20px; left: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.hud-score { font-size: 1.6rem; }
-.hud-wave  { font-size: 1.1rem; color: #4a5b8f; }
+/* 弹药：大字号弹匣 / 备弹 */
+.ammo { margin-top: 2px; }
+.ammo b { font-size: 58px; line-height: 1; }
+.ammo span { font-size: 28px; opacity: .8; }
 
-/* ---- 左下：HP 血条 + 子弹数 ---- */
-.hud-bottom-left {
-  position: absolute;
-  bottom: 30px; left: 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.hud-hp-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.hud-ammo {
-  font-family: 'Kalam', 'Architects Daughter', cursive;
-  font-weight: 700;
-  font-size: 3.2rem;
-  line-height: 1;
-  color: #1c2a5e;
-  letter-spacing: 1px;
-  transform: rotate(-1deg);
-}
-.hud-ammo .ammo-sep {
-  color: #4a5b8f;
-  font-weight: 400;
-  margin: 0 4px;
-}
+/* Tally 打卡记数 */
+.tally { display: flex; flex-wrap: wrap; width: 240px; gap: 3px; margin-top: -6px; align-items: flex-end; }
+.tally i { display: block; width: 4px; height: 20px; background: var(--ink); transform: rotate(4deg); border-radius: 2px; opacity: .9; }
+.tally i:nth-child(5n) { margin-right: 10px; transform: rotate(-8deg); }
 
-/* ---- 右下：武器切换菜单 ---- */
-.hud-bottom-right {
-  position: absolute;
-  bottom: 30px; right: 30px;
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.weapon {
-  font-family: 'Architects Daughter', 'Kalam', cursive;
-  color: #4a5b8f;
-  font-size: 1.3rem;
-  letter-spacing: 3px;
-  line-height: 1.2;
-  transform: rotate(0.5deg);
-  opacity: 0.75;
-}
-.weapon.active {
-  color: #e0492b;
-  font-weight: 700;
-  opacity: 1;
-  text-shadow: 1px 1px 0 rgba(224,73,43,0.2);
-}
+/* HP 斜线血条 */
+.health { margin-bottom: 8px; font-size: 26px; display: flex; align-items: center; gap: 10px; }
+.bar { width: 210px; height: 16px; border: 2.5px solid var(--ink); border-radius: 6px 8px 5px 7px / 8px 5px 7px 6px; overflow: hidden; transform: rotate(-1deg); }
+.fill { height: 100%; width: 100%; background: repeating-linear-gradient(-55deg, var(--ink) 0 2.5px, transparent 2.5px 6px); transition: width .15s; }
+.low .bar { border-color: var(--red); }
+.low .fill { background: repeating-linear-gradient(-55deg, var(--red) 0 2.5px, transparent 2.5px 6px); }
+
+/* 武器槽位 */
+.slots { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 20px; opacity: .9; }
+.slot { display: flex; gap: 8px; align-items: baseline; opacity: .5; transform: rotate(1deg); }
+.slot.active { opacity: 1; font-size: 24px; border-bottom: 2px solid var(--ink); }
+.slot .num { font-size: 15px; opacity: .8; border: 1.5px solid var(--ink); border-radius: 4px 6px 4px 5px; padding: 0 4px; }
+
+/* 中央红色准星 */
+.crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; --s: 10px; filter: drop-shadow(0 0 1px rgba(255,255,255,.9)); }
+.crosshair i { position: absolute; background: var(--red); border-radius: 2px; }
+.ch-t { width: 3px; height: 12px; left: -1.5px; top: calc(-1 * var(--s) - 12px); }
+.ch-b { width: 3px; height: 12px; left: -1.5px; top: var(--s); }
+.ch-l { width: 12px; height: 3px; top: -1.5px; left: calc(-1 * var(--s) - 12px); }
+.ch-r { width: 12px; height: 3px; top: -1.5px; left: var(--s); }
+.ch-dot { width: 3px; height: 3px; left: -1.5px; top: -1.5px; border-radius: 50%; }
+.crosshair.katana i { background: var(--ink); }
+.crosshair.katana .ch-t, .crosshair.katana .ch-b { height: 16px; }
+.crosshair.katana .ch-l, .crosshair.katana .ch-r { display: none; }
