@@ -323,6 +323,7 @@ export class DoodleRenderer {
     r.setClearColor(this._clear, 0);
     r.clear(true, true, false);
     r.render(scene, cam);
+    this.lastInfo = { calls: r.info.render.calls, tris: r.info.render.triangles };
     r.setRenderTarget(null);
 
     const u = this.post.uniforms;

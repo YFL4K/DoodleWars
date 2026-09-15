@@ -13,6 +13,7 @@ const canvas = document.getElementById('gameCanvas');
 const doodle = new DoodleRenderer(canvas);
 const camera = doodle.camera;
 const scene = new THREE.Scene();
+scene.add(camera); // 相机必须在场景图中，否则挂在相机下的枪模不会被渲染
 camera.position.set(0, 1.7, 0);
 
 // ===== 环境（复用 v4 画风场景）=====
@@ -20,6 +21,7 @@ const matBlue = inkMaterial({ ink: INK.BLUE });
 const matBlack = inkMaterial({ ink: INK.BLACK });
 const matGround = inkMaterial({ ink: INK.BLUE, shadeScale: .22, shadeBias: .74 });
 const matOrange = inkMaterial({ ink: INK.ORANGE, fill: true });
+const colliders = []; // 建筑 AABB {x0,x1,z0,z1}
 
 const dome = new THREE.Mesh(
   new THREE.SphereGeometry(70, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2),
@@ -30,6 +32,7 @@ scene.add(dome);
 function addBuilding(x, z, w, h, d) {
   const geo = new THREE.BoxGeometry(w, h, d);
   const m = new THREE.Mesh(geo, matBlue); m.position.set(x, h / 2, z); scene.add(m);
+  colliders.push({ x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 });
   for (let i = 0; i < 5; i++) {
     const s = new THREE.Mesh(new THREE.BoxGeometry(w * .5, .35, .8), i % 2 ? matBlack : matBlue);
     s.position.set(x + w / 2 + i * .6, .35 + i * .45, z + d / 2 + 1.2); scene.add(s);
@@ -109,10 +112,16 @@ let mouseDown = false, rightDown = false;
 let prevMouseDown = false;
 let audioStarted = false;
 function ensureAudio() {
-  if (audioStarted) return;
-  audio.init(); audio.resume(); audio.startMusic(); audioStarted = true;
+  audio.markGesture(); // 先标记手势，再在激活窗口内创建/恢复 ctx
+  if (!audioStarted) { audio.init(); audio.startMusic(); audioStarted = true; }
+  audio.autoResume();
 }
-document.addEventListener('click', () => { ensureAudio(); canvas.requestPointerLock(); });
+function tryLock() {
+  ensureAudio();
+  try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* 未激活时忽略 */ }
+}
+document.addEventListener('click', tryLock);
+document.addEventListener('pointerdown', tryLock);
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement === canvas) {
     player.yaw -= e.movementX * 0.0022;
@@ -121,6 +130,7 @@ document.addEventListener('mousemove', (e) => {
   }
 });
 document.addEventListener('mousedown', (e) => {
+  ensureAudio();
   if (e.button === 0) mouseDown = true;
   if (e.button === 2) rightDown = true;
 });
@@ -130,6 +140,7 @@ document.addEventListener('mouseup', (e) => {
 });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('keydown', (e) => {
+  ensureAudio();
   keys[e.code] = true;
   const wi = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3 }[e.code];
   if (wi !== undefined) switchWeapon(wi);
@@ -218,6 +229,22 @@ function addTracer(a, b) {
   scene.add(line); tracers.push({ line, t: 0.06 });
 }
 
+// ===== 碰撞（建筑 AABB + 穹顶边界）=====
+function collideMove(p) {
+  const r = 0.35;
+  for (const c of colliders) {
+    if (p.x > c.x0 - r && p.x < c.x1 + r && p.z > c.z0 - r && p.z < c.z1 + r) {
+      const dxl = p.x - (c.x0 - r), dxr = (c.x1 + r) - p.x, dzl = p.z - (c.z0 - r), dzr = (c.z1 + r) - p.z;
+      const m = Math.min(dxl, dxr, dzl, dzr);
+      if (m === dxl) p.x = c.x0 - r; else if (m === dxr) p.x = c.x1 + r;
+      else if (m === dzl) p.z = c.z0 - r; else p.z = c.z1 + r;
+      return true;
+    }
+  }
+  return false;
+}
+function clampDome(p) { const d = Math.hypot(p.x, p.z); if (d > 62) { p.x *= 62 / d; p.z *= 62 / d; } }
+
 // ===== 主循环 =====
 const clock = new THREE.Clock();
 let elapsed = 0, hurtFx = 0, flashFx = 0;
@@ -241,6 +268,8 @@ function update(dt) {
   player.vel.y -= 18 * dt; // 重力
   player.pos.addScaledVector(player.vel, dt);
   if (player.pos.y <= EYE) { player.pos.y = EYE; player.vel.y = 0; player.grounded = true; }
+  collideMove(player.pos);
+  clampDome(player.pos);
   camera.position.copy(player.pos);
   player.speed = Math.hypot(player.vel.x, player.vel.z);
   player.walkPhase += dt * player.speed * 2;
@@ -278,6 +307,7 @@ function update(dt) {
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     const res = e.update(dt, player.pos, 0, projectiles);
+    if (!e.dead && e.type !== 'flyer' && e.type !== 'bomber' && collideMove(e.pos)) e.group.position.copy(e.pos);
     for (const s of res.out) {
       if (s.type === 'proj') {
         const m = new THREE.Mesh(projGeo, projMat); m.position.copy(s.pos); scene.add(m);
@@ -318,14 +348,31 @@ function removeProj(i) { scene.remove(projectiles[i].mesh); projectiles.splice(i
 function hurtPlayer(dmg) {
   if (!player.alive) return;
   player.hp -= dmg; hurtFx = 1; audio.hurt();
-  if (player.hp <= 0) { player.hp = 0; player.alive = false; hud.message('你被擦掉了', '按 R 重开本局'); }
+  if (player.hp <= 0) {
+    player.hp = 0; player.alive = false;
+    hud.message('你被擦掉了', '点击 / 按 R 重开本局');
+    if (document.exitPointerLock) document.exitPointerLock();
+  }
 }
+function restart() {
+  if (player.alive) return;
+  player.hp = 100; player.alive = true;
+  weapons.forEach(w => { w.mag = w.magSize; if (!w.isMelee) w.reserve = w.maxReserve; w.reloading = false; });
+  for (const e of enemies) scene.remove(e.group);
+  enemies.length = 0;
+  for (const p of projectiles) scene.remove(p.mesh);
+  projectiles.length = 0;
+  spawnQueue = []; wave = 0; waveTimer = 1.5; aliveCount = 0;
+  hud.clear();
+}
+document.addEventListener('click', () => { if (!player.alive) restart(); });
 document.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyR' && !player.alive) { player.hp = 100; player.alive = true; hud.clear(); }
+  if (e.code === 'KeyR' && !player.alive) restart();
 });
 
 function animate() {
   requestAnimationFrame(animate);
+  audio.autoResume(); // 手势过后若仍 suspended（浏览器策略延迟），持续重试
   const dt = Math.min(clock.getDelta(), 0.05);
   elapsed += dt;
   if (player.alive) update(dt);
@@ -338,7 +385,35 @@ function animate() {
   });
   hud.render(dt);
   const dbg = document.getElementById('dbg');
-  if (dbg) dbg.textContent = `E:${enemies.length} alive:${aliveCount} P:${projectiles.length} hp:${player.hp.toFixed(0)} q:${spawnQueue.length}`;
+  if (dbg && !SELFTEST) dbg.textContent = `E:${enemies.length} alive:${aliveCount} P:${projectiles.length} hp:${player.hp.toFixed(0)} q:${spawnQueue.length} cam:${scene.children.includes(camera)} gun:${activeWeapon().root.parent === camera ? activeWeapon().root.visible : 'unparented'} aud:${audio.ctx ? audio.ctx.state : 'off'} tris:${doodle.lastInfo ? doodle.lastInfo.tris : -1}`;
+}
+const SELFTEST = location.hash.includes('selftest');
+window.__t = []; window.__tlog = (s) => { window.__t.push(s); document.getElementById('dbg').textContent = window.__t.join(' | '); };
+if (SELFTEST) {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const gunSeen = doodle.lastInfo && doodle.lastInfo.tris > 500;
+    const c = colliders[0];
+    const p = { x: (c.x0 + c.x1) / 2, z: (c.z0 + c.z1) / 2 };
+    collideMove(p);
+    const blocked = Math.hypot(p.x - (c.x0 + c.x1) / 2, p.z - (c.z0 + c.z1) / 2) > 0.3;
+    let trig = 'N';
+    try {
+      weapons.forEach(w => { w.mag = 5; w.reloading = false; w.fireT = 0; w.cycleT = 0; });
+      weapons.forEach(w => w.tryFire({ aim: false, speed: 0, grounded: true, walkPhase: 0 }));
+      trig = 'OK';
+    } catch (err) { trig = 'ERR ' + err.message; }
+    window.__tlog(`INIT cam=${scene.children.includes(camera)} gunParent=${activeWeapon().root.parent === camera} gunVis=${activeWeapon().root.visible} tris=${doodle.lastInfo ? doodle.lastInfo.tris : -1} seen=${gunSeen} blocked=${blocked} trig=${trig} aud=${audio.ctx ? audio.ctx.state : 'off'}`);
+    setTimeout(() => {
+      activeWeapon().root.visible = false;
+      doodle.render(1.5, scene, {});
+      const noGun = doodle.lastInfo ? doodle.lastInfo.tris : -1;
+      activeWeapon().root.visible = true;
+      doodle.render(2.5, scene, {});
+      const withGun = doodle.lastInfo ? doodle.lastInfo.tris : -1;
+      window.__tlog(`HIDE gunTris=${withGun - noGun}`);
+      setTimeout(() => window.__tlog(`aud=${audio.ctx ? audio.ctx.state : 'off'}`), 1300);
+    }, 900);
+  }));
 }
 startWave(1);
 animate();

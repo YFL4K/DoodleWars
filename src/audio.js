@@ -77,6 +77,14 @@ export class AudioEngine {
     for (let i = 0; i < s; i++) d[i] = Math.random() * 2 - 1;
     this.enabled = true;
   }
+  /** 标记收到过真实用户手势；此后即使动画循环中调用 resume 也符合自动播放策略 */
+  markGesture() {
+    this._gesture = true;
+    this.autoResume();
+  }
+  autoResume() {
+    if (this._gesture && this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  }
   resume() { this.ctx && this.ctx.state === 'suspended' && this.ctx.resume(); }
   setListener(pos, right) { this.listenerPos = pos; this.listenerRight = right; }
 
