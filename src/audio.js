@@ -138,18 +138,28 @@ export class AudioEngine {
 
   // ===== 战斗音效 =====
   shot() {
-    this.noise({ dur: .17, gain: .7, type: 'bandpass', freq: 1200, freqEnd: 250, q: .7 });
-    this.noise({ dur: .06, gain: .45, type: 'highpass', freq: 2800 });
-    this.tone({ freq: 160, freqEnd: 40, dur: .15, gain: .6, type: 'triangle' });
+    this.noise({ dur: .17, gain: 1.4, type: 'bandpass', freq: 1200, freqEnd: 250, q: .7 });
+    this.noise({ dur: .06, gain: .9, type: 'highpass', freq: 2800 });
+    this.tone({ freq: 160, freqEnd: 40, dur: .15, gain: 1.2, type: 'triangle' });
+  }
+  pistolFire() {
+    this.noise({ dur: .1, gain: 1.3, type: 'bandpass', freq: 1500, freqEnd: 400, q: .8 });
+    this.noise({ dur: .05, gain: .9, type: 'highpass', freq: 2800 });
+    this.tone({ freq: 190, freqEnd: 45, dur: .08, gain: 1.1, type: 'triangle' });
+  }
+  smgFire() {
+    this.noise({ dur: .11, gain: 1.2, type: 'bandpass', freq: 1100, freqEnd: 300, q: .8 });
+    this.noise({ dur: .05, gain: .85, type: 'highpass', freq: 2600 });
+    this.tone({ freq: 170, freqEnd: 45, dur: .09, gain: 1, type: 'triangle' });
   }
   shotgunFire() {
-    this.noise({ dur: .3, gain: .8, type: 'lowpass', freq: 1500, freqEnd: 150 });
-    this.tone({ freq: 90, freqEnd: 30, dur: .25, gain: .55, type: 'triangle' });
+    this.noise({ dur: .3, gain: 1.5, type: 'lowpass', freq: 1500, freqEnd: 150 });
+    this.tone({ freq: 90, freqEnd: 30, dur: .25, gain: 1, type: 'triangle' });
   }
   sniperFire() {
-    this.noise({ dur: .35, gain: .8, type: 'bandpass', freq: 700, freqEnd: 120, q: .5 });
-    this.noise({ dur: .08, gain: .4, type: 'highpass', freq: 3200 });
-    this.tone({ freq: 400, freqEnd: 50, dur: .3, gain: .4, type: 'sawtooth' });
+    this.noise({ dur: .35, gain: 1.5, type: 'bandpass', freq: 700, freqEnd: 120, q: .5 });
+    this.noise({ dur: .08, gain: .8, type: 'highpass', freq: 3200 });
+    this.tone({ freq: 400, freqEnd: 50, dur: .3, gain: .8, type: 'sawtooth' });
   }
   revolver() {
     this.noise({ dur: .2, gain: .75, type: 'bandpass', freq: 1000, freqEnd: 200, q: .8 });

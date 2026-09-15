@@ -63,7 +63,7 @@ const player = {
 const EYE = 1.7;
 
 // ===== 武器 =====
-const weaponKeys = ['rifle', 'shotgun', 'sniper', 'katana'];
+const weaponKeys = ['pistol', 'smg', 'shotgun', 'sniper', 'katana'];
 const weapons = weaponKeys.map(k => new Weapon(k));
 let curWeapon = 0;
 weapons.forEach(w => camera.add(w.root));
@@ -139,10 +139,16 @@ document.addEventListener('mouseup', (e) => {
   if (e.button === 2) rightDown = false;
 });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
+// 滚轮循环切枪（CS 手感：向下滚=下一把，向上滚=上一把）
+document.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const dir = e.deltaY > 0 ? 1 : -1;
+  switchWeapon((curWeapon + dir + weapons.length) % weapons.length);
+}, { passive: false });
 document.addEventListener('keydown', (e) => {
   ensureAudio();
   keys[e.code] = true;
-  const wi = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3 }[e.code];
+  const wi = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4 }[e.code];
   if (wi !== undefined) switchWeapon(wi);
   if (e.code === 'KeyR') activeWeapon().startReload();
   if (e.code === 'Space' && player.grounded) { player.vel.y = 6; player.grounded = false; }

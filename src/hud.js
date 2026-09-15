@@ -45,11 +45,11 @@ export class HUD {
   setWeapon(i) {
     this.weapon = i;
     this.el.slots.forEach((s, idx) => s.classList.toggle('active', idx === i));
-    this.el.crosshair.classList.toggle('katana', i === 3);
-    this.el.scope.classList.toggle('on', i === 2 && this._aim);
+    this.el.crosshair.classList.toggle('katana', i === 4);
+    this.el.scope.classList.toggle('on', i === 3 && this._aim);
   }
 
-  setAim(on) { this._aim = on; this.el.scope.classList.toggle('on', on && this.weapon === 2); }
+  setAim(on) { this._aim = on; this.el.scope.classList.toggle('on', on && this.weapon === 3); }
 
   hitmarker(crit, kill) {
     const h = this.el.hitmarker;
