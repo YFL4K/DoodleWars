@@ -72,3 +72,38 @@ html, body {
 .crosshair.katana i { background: var(--ink); }
 .crosshair.katana .ch-t, .crosshair.katana .ch-b { height: 16px; }
 .crosshair.katana .ch-l, .crosshair.katana .ch-r { display: none; }
+
+/* 换弹中弹药红化 */
+.ammo.reloading b { color: var(--red); font-size: 30px; }
+
+/* hitmarker 命中反馈 */
+.hitmarker { position: absolute; left: 50%; top: 50%; opacity: 0; mix-blend-mode: multiply; }
+.hitmarker i { position: absolute; width: 3.5px; height: 36px; background: #e8801a; left: -1.75px; top: -18px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(250,248,238,.85); }
+.hitmarker i:first-child { transform: rotate(45deg); }
+.hitmarker i:last-child { transform: rotate(-45deg); }
+.hitmarker.show { animation: hm .24s ease-out; }
+.hitmarker.crit i { background: var(--red); width: 4.5px; height: 44px; top: -22px; left: -2.25px; }
+.hitmarker.kill i { background: var(--red); width: 5px; height: 50px; top: -25px; left: -2.5px; }
+@keyframes hm { 0% { opacity: 1; transform: scale(1.5); } 100% { opacity: 0; transform: scale(1); } }
+
+/* killfeed 击杀提示 */
+.killfeed { position: absolute; right: 4%; top: 28%; text-align: right; font-size: 27px; mix-blend-mode: multiply; }
+.killfeed div { animation: kf 1.7s ease-out forwards; }
+.killfeed .pts { color: var(--red); }
+@keyframes kf { 0% { opacity: 0; transform: translateX(30px) rotate(3deg); } 15% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 中央消息 */
+.message { position: absolute; left: 0; right: 0; top: 24%; text-align: center; mix-blend-mode: multiply; }
+.msg-main { font-size: 88px; color: var(--ink); transform: rotate(-2deg); opacity: 0; letter-spacing: 3px; line-height: 1; }
+.msg-main.show { animation: scribble .55s ease-out forwards; }
+@keyframes scribble { 0% { opacity: 0; transform: rotate(-7deg) scale(1.7); filter: blur(3px); } 55% { opacity: 1; transform: rotate(-1deg) scale(.95); filter: blur(0); } 100% { opacity: 1; transform: rotate(-2deg) scale(1); } }
+.msg-sub { font-size: 32px; opacity: .85; }
+
+/* 狙击镜 */
+.scope { position: absolute; inset: 0; opacity: 0; transition: opacity .1s; pointer-events: none; }
+.scope.on { opacity: 1; }
+.scope .mask { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(246,243,230,0) 0 30vh, var(--paper) 30.6vh 100%); }
+.scope .ring { position: absolute; left: 50%; top: 50%; width: 60.5vh; height: 60.5vh; margin: -30.25vh; border: 3.5px solid var(--ink); border-radius: 50%; box-shadow: inset 0 0 0 7px rgba(26,48,192,.12); }
+.scope .cx { position: absolute; left: 50%; top: 50%; width: 60vh; height: 2.5px; margin: -1px -30vh; background: repeating-linear-gradient(90deg, var(--ink) 0 14px, transparent 14px 17px); }
+.scope .cy { position: absolute; left: 50%; top: 50%; width: 2.5px; height: 60vh; margin: -30vh -1px; background: repeating-linear-gradient(180deg, var(--ink) 0 14px, transparent 14px 17px); }
+.scope .dot { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px; background: var(--red); border-radius: 50%; }

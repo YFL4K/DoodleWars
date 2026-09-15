@@ -49,9 +49,27 @@
   <div class="crosshair" id="crosshair">
     <i class="ch-t"></i><i class="ch-b"></i><i class="ch-l"></i><i class="ch-r"></i><i class="ch-dot"></i>
   </div>
+
+  <!-- 命中反馈 hitmarker -->
+  <div class="hitmarker" id="hitmarker"><i></i><i></i></div>
+
+  <!-- 击杀提示 killfeed -->
+  <div class="killfeed" id="killfeed"></div>
+
+  <!-- 中央大字消息 -->
+  <div class="message" id="message">
+    <div class="msg-main" id="msgMain"></div>
+    <div class="msg-sub" id="msgSub"></div>
+  </div>
+
+  <!-- 狙击镜（SNIPER ADS） -->
+  <div class="scope" id="scope">
+    <div class="mask"></div><div class="ring"></div><div class="cx"></div><div class="cy"></div><div class="dot"></div>
+  </div>
 </div>
 
 <div id="errorBox" style="position:fixed;top:0;left:0;z-index:999;background:#fff;color:#c0392b;padding:10px;font:12px monospace;white-space:pre-wrap;display:none;"></div>
+<div id="dbg" style="position:fixed;right:4px;bottom:4px;z-index:999;color:#1a30c0;font:12px monospace;pointer-events:none;"></div>
 <script>
 window.addEventListener('error', function(e) {
   var box = document.getElementById('errorBox');
